@@ -18,8 +18,19 @@
     return @[@"UICollectionView"];
 }
 
-+ (NSString *)generateLazyCodeFromClassName:(NSString *)className propertyName:(NSString *)propertyName {
-    NSString *originalLazyCode = @"\
++ (NSString *)generateLazyCodeFromLazySouceData:(HZLazyCoreData *)sourceData {
+    NSString *originalLazyCode = [self __fetchOriginalReplacementSourceCodeFromType:sourceData.sourceCodeType];
+    
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplaceClassName withString:sourceData.l_className];
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplacePropertyName withString:sourceData.l_propertyName];
+    return originalLazyCode;
+}
+
+#pragma mark - private method
++ (NSString *)__fetchOriginalReplacementSourceCodeFromType:(HZSourceCodeType)type {
+    NSString *replacementSourceCode;
+    if (type == HZSourceCodeTypeObjectiveC) {
+        replacementSourceCode = @"\
 - (ClassName *)propertyName {\n\
     if (!_propertyName) {\n\
         UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];\n\
@@ -37,10 +48,26 @@
     }\n\
     return _propertyName;\n\
 }";
-            
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"ClassName" withString:className];
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"propertyName" withString:propertyName];
-    return originalLazyCode;
+    } else if (type == HZSourceCodeTypeSwift) {
+        replacementSourceCode = @"\
+    lazy var propertyName: ClassName = {\n\
+        let flowLayout = UICollectionViewFlowLayout.init()\n\
+        flowLayout.itemSize = <#CGSzie#>\n\
+        flowLayout.scrollDirection = <#UICollectionView.ScrollDirection#>\n\
+        flowLayout.minimumLineSpacing = <#CGFloat#>\n\
+        flowLayout.minimumInteritemSpacing = <#CGFloat#>\n\
+        flowLayout.sectionInset = <#UIEdgeInset#>\n\
+        \n\
+        var propertyName = UICollectionView.init(frame: <#T##CGRect#>, collectionViewLayout: flowLayout)\n\
+        propertyName.backgroundColor = <#UIColor?#>\n\
+        propertyName.dataSource = <#UICollectionViewDataSource#>\n\
+        propertyName.delegate = <#UICollectionViewDelegate#>\n\
+        propertyName.register(<#AnyClass?#>, forCellWithReuseIdentifier: <#String#>)\n\
+        return propertyName\n\
+    }()\
+        ";
+    }
+    return replacementSourceCode;
 }
 
 @end

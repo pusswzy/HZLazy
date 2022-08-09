@@ -18,8 +18,19 @@
     return @[@"UIScrollView"];
 }
 
-+ (NSString *)generateLazyCodeFromClassName:(NSString *)className propertyName:(NSString *)propertyName {
-    NSString *originalLazyCode = @"\
++ (NSString *)generateLazyCodeFromLazySouceData:(HZLazyCoreData *)sourceData {
+    NSString *originalLazyCode = [self __fetchOriginalReplacementSourceCodeFromType:sourceData.sourceCodeType];
+    
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplaceClassName withString:sourceData.l_className];
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplacePropertyName withString:sourceData.l_propertyName];
+    return originalLazyCode;
+}
+
+#pragma mark - private method
++ (NSString *)__fetchOriginalReplacementSourceCodeFromType:(HZSourceCodeType)type {
+    NSString *replacementSourceCode;
+    if (type == HZSourceCodeTypeObjectiveC) {
+        replacementSourceCode = @"\
 - (ClassName *)propertyName {\n\
     if (!_propertyName) {\n\
         _propertyName = [[ClassName alloc] init];\n\
@@ -35,10 +46,24 @@
     }\n\
     return _propertyName;\n\
 }";
-            
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"ClassName" withString:className];
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"propertyName" withString:propertyName];
-    return originalLazyCode;
+    } else if (type == HZSourceCodeTypeSwift) {
+        replacementSourceCode = @"\
+    lazy var propertyName: ClassName = {\n\
+        var propertyName = ClassName.init()\n\
+        propertyName.backgroundColor = <#UIColor?#>\n\
+        propertyName.delegate = <#UIScrollViewDelegate?#>\n\
+        propertyName.contentSize = <#CGSize#>\n\
+        propertyName.contentInset = <#UIEdgeInset#>\n\
+        propertyName.showsHorizontalScrollIndicator = <#Bool#>\n\
+        propertyName.showsVerticalScrollIndicator = <#Bool#>\n\
+        propertyName.isPagingEnabled = <#Bool#>\n\
+        propertyName.bounces = <#Bool#>\n\
+        propertyName.isScrollEnabled = <#Bool#>\n\
+        return propertyName\n\
+    }()\
+        ";
+    }
+    return replacementSourceCode;
 }
 
 @end

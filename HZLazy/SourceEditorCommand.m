@@ -25,13 +25,15 @@ NSError *generateCustomError (int code, NSString *localizedErrorDescription) {
     return [NSError errorWithDomain:HZLazyErrorDomain code:code userInfo:@{NSLocalizedDescriptionKey : localizedErrorDescription}];
 }
 
-
+#define kLogResult 1
 - (void)performCommandWithInvocation:(XCSourceEditorCommandInvocation *)invocation completionHandler:(void (^)(NSError * _Nullable nilOrError))completionHandler
 {
     // 判断是否为支持的文件类型
     CFStringRef curUTI = (__bridge CFStringRef)invocation.buffer.contentUTI;
-    if (UTTypeEqual(curUTI, kUTTypeObjectiveCSource) == NO) {
-        completionHandler(generateCustomError(-1, @"只支持Objective-C的.m文件"));
+    HZSourceCodeType sourceCodeType = [HZLazyGenerator fetchSourceCodeTypeFromContentUTI:curUTI];
+    if (sourceCodeType == HZSourceCodeTypeUnknown) {
+        NSString *errorReason = [NSString stringWithFormat:@"当前文件类型为:%@, 工具只支持Objective-C的.m文件和Swift的.swift文件", (__bridge NSString *)curUTI];
+        completionHandler(generateCustomError(-1, errorReason));
         return;
     }
     
@@ -41,9 +43,10 @@ NSError *generateCustomError (int code, NSString *localizedErrorDescription) {
     NSArray <NSString *> *selectCodeArray = [self fetchSelectCodeArrayFromStartLine:startLine toEndLine:endLine invocation:invocation];
     NSMutableString *resultLazyCode = [[NSMutableString alloc] init];
     NSMutableString *log = [[NSMutableString alloc] initWithString:@"✨Handle Success: "];
-    [selectCodeArray enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+    NSMutableArray <HZLazyCoreData *>*validDataArray = [NSMutableArray array];
+    [selectCodeArray enumerateObjectsUsingBlock:^(NSString * _Nonnull lineSource, NSUInteger idx, BOOL * _Nonnull stop) {
 #warning TODO 处理泛型的类别
-        HZLazyCoreData *coreData = [self fetchLazyCoreDataFromSoureLineString:obj];
+        HZLazyCoreData *coreData = [[HZLazyGenerator sharedGenerator] createLazySourceDataFromSourceLineString:lineSource sourceCodeType:sourceCodeType];
         if ([coreData judgeIsValid] == NO) {
             return;
         }
@@ -52,6 +55,7 @@ NSError *generateCustomError (int code, NSString *localizedErrorDescription) {
         if (!lazyString) {
             return;
         }
+        coreData.sourceLine = startLine + idx;
         [resultLazyCode appendString:lazyString];
         [resultLazyCode appendString:@"\n\n"];
         
@@ -59,24 +63,41 @@ NSError *generateCustomError (int code, NSString *localizedErrorDescription) {
         if (idx != selectCodeArray.count - 1) {
             [log appendString:@", "];
         }
+        [validDataArray addObject:coreData];
     }];
     
     // 找到插入的那行
     NSInteger findLine = NSNotFound;
-    for (NSInteger i = invocation.buffer.lines.count - 1; i > selectRange.end.line; i--) {
-        NSString *curLineString = invocation.buffer.lines[i];
-        if ([curLineString containsString:@"@end"]) {
-            findLine = i;
-            break;
+    if (sourceCodeType == HZSourceCodeTypeObjectiveC) {
+        for (NSInteger i = invocation.buffer.lines.count - 1; i > selectRange.end.line; i--) {
+            NSString *curLineString = invocation.buffer.lines[i];
+            if ([curLineString containsString:@"@end"]) {
+                findLine = i;
+                break;
+            }
         }
+    } else if (sourceCodeType == HZSourceCodeTypeSwift) {
+        findLine = endLine + 1;
     }
+    
     if (resultLazyCode.length == 0) {
         completionHandler(generateCustomError(-2, @"选中区域没有合规的属性"));
         return;
     }
+    
+    //
+    [self recombinateResultCode:resultLazyCode sourceCodeType:sourceCodeType invocation:invocation];
+    // ✨
     [invocation.buffer.lines insertObject:resultLazyCode atIndex:findLine == NSNotFound ? invocation.buffer.lines.count - 1 : findLine];
     
+    // swift特殊处理 需要将之前声明的属性移除掉
+    for (HZLazyCoreData *coreData in validDataArray.reverseObjectEnumerator) {
+        [invocation.buffer.lines removeObjectAtIndex:coreData.sourceLine];
+    }
+    
+#if kLogResult
     NSLog(@"%@", log);
+#endif
     completionHandler(nil);
 }
 
@@ -107,42 +128,33 @@ NSError *generateCustomError (int code, NSString *localizedErrorDescription) {
     return YES;
 }
 
-- (HZLazyCoreData *)fetchLazyCoreDataFromSoureLineString:(NSString *)sourceLineString {
-    if (sourceLineString == nil || sourceLineString.length == 0) {
-        return nil;
+- (void)recombinateResultCode:(NSMutableString *)resultCode sourceCodeType:(HZSourceCodeType)sourceCodeType invocation:(XCSourceEditorCommandInvocation *)invocation {
+    // 判断是否添加pragma objective环境下
+    if (sourceCodeType == HZSourceCodeTypeObjectiveC) {
+        BOOL needInsert = YES;
+        for (int i = 0; i < invocation.buffer.lines.count; i++) {
+            NSString *curLineString = invocation.buffer.lines[i];
+            if ([curLineString containsString:kObjectiveCGetterPragma]) {
+                needInsert = NO;
+                break;
+            }
+        }
+        if (needInsert == YES) {
+            [resultCode insertString:kObjectiveCGetterPragma atIndex:0];
+        }
+    } else if (sourceCodeType == HZSourceCodeTypeSwift) {
+        BOOL needInsert = YES;
+        for (int i = 0; i < invocation.buffer.lines.count; i++) {
+            NSString *curLineString = invocation.buffer.lines[i];
+            if ([curLineString containsString:kSwiftGetterPragma]) {
+                needInsert = NO;
+                break;
+            }
+        }
+        if (needInsert == YES) {
+            [resultCode insertString:kSwiftGetterPragma atIndex:0];
+        }
     }
-    sourceLineString = [sourceLineString stringByReplacingOccurrencesOfString:@" " withString:@""];
-    HZLazyCoreData *lazyCoreData = [[HZLazyCoreData alloc] init];
-    // class name
-    NSRange classNameRange = [self.classNameRE rangeOfFirstMatchInString:sourceLineString options:NSMatchingReportCompletion range:NSMakeRange(0, sourceLineString.length)];
-    if (classNameRange.location != NSNotFound) {
-        lazyCoreData.l_className = [sourceLineString substringWithRange:classNameRange];
-    }
-    // property name
-    NSRange propertyNameRange = [self.propertyNameRE rangeOfFirstMatchInString:sourceLineString options:NSMatchingReportCompletion range:NSMakeRange(0, sourceLineString.length)];
-    if (propertyNameRange.location != NSNotFound) {
-        lazyCoreData.l_propertyName = [sourceLineString substringWithRange:propertyNameRange];
-    }
-    return lazyCoreData;
 }
-
-#pragma mark - getter method
-#warning 这些正则可以优化下
-- (NSRegularExpression *)classNameRE {
-    if (!_classNameRE) {
-        NSString *classNamePattern = @"(?<=\\))\\w*(?=\\*)";
-        _classNameRE= [NSRegularExpression regularExpressionWithPattern:classNamePattern options:NSRegularExpressionAllowCommentsAndWhitespace error:nil];
-    }
-    return _classNameRE;
-}
-
-- (NSRegularExpression *)propertyNameRE {
-    if (!_propertyNameRE) {
-        NSString *propertyNamePattern = @"(?<=\\*)\\w*(?=;)";
-        _propertyNameRE = [NSRegularExpression regularExpressionWithPattern:propertyNamePattern options:NSRegularExpressionAllowCommentsAndWhitespace error:nil];
-    }
-    return _propertyNameRE;
-}
-
 
 @end

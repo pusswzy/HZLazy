@@ -18,24 +18,44 @@
     return @[@"UIButton"];
 }
 
-+ (NSString *)generateLazyCodeFromClassName:(NSString *)className propertyName:(NSString *)propertyName {
-    NSString *originalLazyCode = @"\
++ (NSString *)generateLazyCodeFromLazySouceData:(HZLazyCoreData *)sourceData {
+    NSString *originalLazyCode = [self __fetchOriginalReplacementSourceCodeFromType:sourceData.sourceCodeType];
+        
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplaceClassName withString:sourceData.l_className];
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplacePropertyName withString:sourceData.l_propertyName];
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"PropertyName" withString:[sourceData.l_propertyName capitalizedString]];
+    return originalLazyCode;
+}
+
+#pragma mark - private method
++ (NSString *)__fetchOriginalReplacementSourceCodeFromType:(HZSourceCodeType)type {
+    NSString *replacementSourceCode;
+    if (type == HZSourceCodeTypeObjectiveC) {
+        replacementSourceCode = @"\
 - (ClassName *)propertyName {\n\
     if (!_propertyName) {\n\
         _propertyName = [ClassName buttonWithType:UIButtonTypeCustom];\n\
         [_propertyName setTitle:<#(NSString *)#> forState:UIControlStateNormal];\n\
         [_propertyName setTitleColor:<#(UIColor *)#> forState:UIControlStateNormal];\n\
         _propertyName.titleLabel.font = <#(UIFont *)#>;\n\
-        // [_propertyName setImage:<#(UIImage *)#> forState:UIControlStateNormal];\n\
+        [_propertyName setImage:<#(UIImage *)#> forState:UIControlStateNormal];\n\
         [_propertyName addTarget:self action:@selector(handlePropertyNameClickAction:) forControlEvents:UIControlEventTouchUpInside];\n\
     }\n\
     return _propertyName;\n\
 }";
-        
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"ClassName" withString:className];
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"propertyName" withString:propertyName];
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"PropertyName" withString:[propertyName capitalizedString]];
-    return originalLazyCode;
+    } else if (type == HZSourceCodeTypeSwift) {
+        replacementSourceCode = @"\
+    lazy var propertyName: ClassName = {\n\
+        var propertyName = UIButton.init(type: .custom)\n\
+        propertyName.setTitle(<#String?#>, for: .normal)\n\
+        propertyName.setTitleColor(<#UIColor?#>, for: .normal)\n\
+        propertyName.titleLabel?.font = <#UIFont!#>\n\
+        propertyName.setImage(<#UIImage?#>, for: .normal)\n\
+        propertyName.addTarget(self, action: <#Selector#>, for: .touchUpInside)\n\
+        return propertyName\n\
+    }()\
+        ";
+    }
+    return replacementSourceCode;
 }
-
 @end

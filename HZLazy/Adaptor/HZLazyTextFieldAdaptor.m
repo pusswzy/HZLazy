@@ -18,8 +18,19 @@
     return @[@"UITextField"];
 }
 
-+ (NSString *)generateLazyCodeFromClassName:(NSString *)className propertyName:(NSString *)propertyName {
-    NSString *originalLazyCode = @"\
++ (NSString *)generateLazyCodeFromLazySouceData:(HZLazyCoreData *)sourceData {
+    NSString *originalLazyCode = [self __fetchOriginalReplacementSourceCodeFromType:sourceData.sourceCodeType];
+    
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplaceClassName withString:sourceData.l_className];
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplacePropertyName withString:sourceData.l_propertyName];
+    return originalLazyCode;
+}
+
+#pragma mark - private method
++ (NSString *)__fetchOriginalReplacementSourceCodeFromType:(HZSourceCodeType)type {
+    NSString *replacementSourceCode;
+    if (type == HZSourceCodeTypeObjectiveC) {
+        replacementSourceCode = @"\
 - (ClassName *)propertyName {\n\
     if (!_propertyName) {\n\
         _propertyName = [[ClassName alloc] init];\n\
@@ -34,10 +45,23 @@
     }\n\
     return _propertyName;\n\
 }";
-            
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"ClassName" withString:className];
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"propertyName" withString:propertyName];
-    return originalLazyCode;
+    } else if (type == HZSourceCodeTypeSwift) {
+        replacementSourceCode = @"\
+    lazy var propertyName: ClassName = {\n\
+        var propertyName = ClassName.init()\n\
+        propertyName.delegate = <#UITextFieldDelegate?#>\n\
+        propertyName.text = <#String?#>\n\
+        propertyName.font = <#UIFont?#>\n\
+        propertyName.textColor = <#UIColor?#>\n\
+        propertyName.placeholder = <#String?#>\n\
+        propertyName.textAlignment = <#NSTextAlignment#>\n\
+        propertyName.clearButtonMode = <#UITextField.ViewMode#>\n\
+        propertyName.clearsOnBeginEditing = <#Bool#>\n\
+        return propertyName\n\
+    }()\
+";
+    }
+    return replacementSourceCode;
 }
 
 @end

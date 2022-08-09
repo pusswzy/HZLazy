@@ -9,6 +9,14 @@
 
 @implementation HZLazyCoreData
 
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _sourceLine = NSNotFound;
+    }
+    return self;
+}
+
 - (BOOL)judgeIsValid {
     return self.l_propertyName.length > 0 && self.l_className.length > 0;
 }
