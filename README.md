@@ -1,2 +1,2 @@
 # HZLazy
-iOS property getter method auto generator.
+iOS property getter method auto generator, support Objective-C & Swift.

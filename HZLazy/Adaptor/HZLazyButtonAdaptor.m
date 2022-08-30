@@ -23,7 +23,9 @@
         
     originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplaceClassName withString:sourceData.l_className];
     originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:kReplacePropertyName withString:sourceData.l_propertyName];
-    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"PropertyName" withString:[sourceData.l_propertyName capitalizedString]];
+    NSString *firstLetter = [sourceData.l_propertyName substringWithRange:NSMakeRange(0, 1)];
+    NSString *actionPropertyName = [sourceData.l_propertyName stringByReplacingCharactersInRange:NSMakeRange(0, 1) withString:[firstLetter lowercaseString]];
+    originalLazyCode = [originalLazyCode stringByReplacingOccurrencesOfString:@"PropertyName" withString:actionPropertyName];
     return originalLazyCode;
 }
 
