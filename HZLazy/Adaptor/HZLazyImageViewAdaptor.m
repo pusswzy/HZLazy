@@ -34,7 +34,7 @@
 - (ClassName *)propertyName {\n\
     if (!_propertyName) {\n\
         _propertyName = [[ClassName alloc] init];\n\
-        _propertyName.image = <#(UIImage *)#>;\n\
+        _propertyName.image = <#(UIImage *)#>\n\
         // _propertyName.userInteractionEnabled = YES;\n\
         // _propertyName.contentMode = UIViewContentModeScaleAspectFit;\n\
     }\n\

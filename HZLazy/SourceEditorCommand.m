@@ -91,9 +91,12 @@ NSError *generateCustomError (int code, NSString *localizedErrorDescription) {
     [invocation.buffer.lines insertObject:resultLazyCode atIndex:findLine == NSNotFound ? invocation.buffer.lines.count - 1 : findLine];
     
     // swift特殊处理 需要将之前声明的属性移除掉
-    for (HZLazyCoreData *coreData in validDataArray.reverseObjectEnumerator) {
-        [invocation.buffer.lines removeObjectAtIndex:coreData.sourceLine];
+    if (sourceCodeType == HZSourceCodeTypeSwift) {
+        for (HZLazyCoreData *coreData in validDataArray.reverseObjectEnumerator) {
+            [invocation.buffer.lines removeObjectAtIndex:coreData.sourceLine];
+        }
     }
+    
     
 #if kLogResult
     NSLog(@"%@", log);
